@@ -1,0 +1,4 @@
+pkg/
+pkg
+
+frp/build/*.exe
