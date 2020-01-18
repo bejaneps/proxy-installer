@@ -1,9 +1,12 @@
 pkg/
 pkg
 
-*.exe
-
 build/
+
+installer.exe
+
+Debug/
+Debug
 
 *.log
 *.obj
