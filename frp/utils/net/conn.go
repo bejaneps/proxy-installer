@@ -52,7 +52,14 @@ func AuthUser(username, password, authURL string) (data msg.AuthResp, err error)
 		return data, errors.New("authentication failed: " + err.Error())
 	}
 
-	resp, err := http.Post(authURL, "application/json", bytes.NewBuffer(jsonValues))
+	req, err := http.NewRequest("POST", authURL, bytes.NewBuffer(jsonValues))
+	if err != nil {
+		return data, errors.New("authentication failed: " + err.Error())
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return data, errors.New("authentication failed: " + err.Error())
 	}
@@ -70,6 +77,7 @@ func AuthUser(username, password, authURL string) (data msg.AuthResp, err error)
 	}
 
 	if data.Status != "OK" || data.Data == nil {
+		log.Printf("[ERROR]: response body: \n%s", string(body))
 		return data, errors.New("authentication failed: user or password incorrect")
 	}
 

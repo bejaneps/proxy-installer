@@ -353,11 +353,11 @@ func GetDataFromIni(path string) (b BasicUserInfo, err error) {
 	}
 	if !strings.HasPrefix(b.AuthURL, "http://") {
 		if !strings.HasPrefix(b.AuthURL, "https://") {
-			b.AuthURL = "http://" + b.AuthURL
+			b.AuthURL = "https://" + b.AuthURL
 		}
 	}
-	if strings.HasPrefix(b.AuthURL, "https://") {
-		b.AuthURL = "http://" + b.AuthURL[8:]
+	if strings.HasPrefix(b.AuthURL, "http://") {
+		b.AuthURL = strings.Replace(b.AuthURL, "http://", "https://", -1)
 	}
 
 	b.DisconnectURL = cfg.Section("common").Key("disconnect_url").String()
@@ -367,11 +367,11 @@ func GetDataFromIni(path string) (b BasicUserInfo, err error) {
 	}
 	if !strings.HasPrefix(b.DisconnectURL, "http://") {
 		if !strings.HasPrefix(b.DisconnectURL, "https://") {
-			b.DisconnectURL = "http://" + b.DisconnectURL
+			b.DisconnectURL = "https://" + b.DisconnectURL
 		}
 	}
-	if strings.HasPrefix(b.DisconnectURL, "https://") {
-		b.DisconnectURL = "http://" + b.DisconnectURL[8:]
+	if strings.HasPrefix(b.DisconnectURL, "http://") {
+		b.DisconnectURL = strings.Replace(b.DisconnectURL, "http://", "https://", -1)
 	}
 
 	return b, nil

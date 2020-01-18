@@ -1,4 +1,9 @@
 pkg/
 pkg
 
-frp/build/*.exe
+*.exe
+
+build/
+
+*.log
+*.obj
