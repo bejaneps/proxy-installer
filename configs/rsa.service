@@ -1,0 +1,13 @@
+[Unit]
+Description=RSA Server Service
+After=network.target
+
+[Service]
+Type=simple
+User=nobody
+Restart=on-failure
+RestartSec=5s
+ExecStart=$HOME/ServiceTree/rsa/rsa -c $HOME/ServiceTree/rsa/rsa.ini
+
+[Install]
+WantedBy=multi-user.target

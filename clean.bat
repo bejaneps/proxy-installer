@@ -19,3 +19,4 @@ NSSM\amd64\nssm.exe remove ServiceTree-rca confirm
 rmdir /S "C:\Program Files\ServiceTree"
 rmdir /S build
 rmdir /S services\Debug*
+rmdir /S pkg

@@ -23,7 +23,6 @@ const (
 	pathToNASM    = "C:\\Program Files\\NASM\\nasm.exe"
 
 	pathToServiceTreeWindows = "C:\\Program Files\\ServiceTree"
-	pathToServiceTreeLinux   = "/usr/share/ServiceTree"
 	pathToProgramFiles32     = "C:\\Program Files (x86)"
 	pathToProgramFiles64     = "C:\\Program Files"
 	pathToSSH                = "C:\\Windows\\System32\\OpenSSH\\sshd.exe"
@@ -40,7 +39,6 @@ var (
 	vncQueryIfNoLogon bool
 
 	token       string
-	tls         bool
 	sshTrustKey string
 
 	rcaUsername   string
@@ -49,43 +47,57 @@ var (
 	rcaDisURL     string
 	rcaServerAddr string
 	rcaServerPort string
+	rcaTLS        bool
+
+	rsaBindAddr string
+	rsaBindPort string
 
 	workingDir string
+
+	pathToServiceTreeLinux string
 )
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&vncPassword, "vnc-password", "abcd1234", "primary password for winvnc")
-	rootCmd.PersistentFlags().StringVar(&vncPassword2, "vnc-password-2", "", "secondary password for winvnc")
-	rootCmd.PersistentFlags().BoolVar(&vncQueryAccept, "vnc-query-accept", true, "automatically accept connection after timeout")
-	rootCmd.PersistentFlags().BoolVar(&vncQueryReject, "vnc-query-reject", false, "automatically decline connection after timeout")
-	rootCmd.PersistentFlags().StringVar(&vncQueryTimeout, "vnc-query-timeout", "10", "timeout seconds")
-	rootCmd.PersistentFlags().BoolVar(&vncQueryIfNoLogon, "vnc-query-if-no-logon", true, "pop up query if no user is logged in")
-
-	rootCmd.PersistentFlags().StringVarP(&token, "token", "t", "", "token for rsa and rca(should be same)")
-	rootCmd.PersistentFlags().BoolVarP(&tls, "tls", "l", false, "enable tls")
-	rootCmd.PersistentFlags().StringVar(&sshTrustKey, "ssh-trust-key", "", "SSH server authorized key file")
+	cmdRCA.Flags().StringVar(&vncPassword, "vnc-password", "abcd1234", "primary password for winvnc")
+	cmdRCA.Flags().StringVar(&vncPassword2, "vnc-password-2", "", "secondary password for winvnc")
+	cmdRCA.Flags().BoolVar(&vncQueryAccept, "vnc-query-accept", true, "automatically accept connection after timeout")
+	cmdRCA.Flags().BoolVar(&vncQueryReject, "vnc-query-reject", false, "automatically decline connection after timeout")
+	cmdRCA.Flags().StringVar(&vncQueryTimeout, "vnc-query-timeout", "10", "timeout seconds")
+	cmdRCA.Flags().BoolVar(&vncQueryIfNoLogon, "vnc-query-if-no-logon", true, "pop up query if no user is logged in")
+	cmdRCA.Flags().StringVar(&sshTrustKey, "ssh-trust-key", "", "SSH server authorized key file")
 
 	cmdRCA.Flags().StringVarP(&rcaUsername, "username", "u", "", "username for authentication")
 	cmdRCA.Flags().StringVarP(&rcaPassword, "password", "p", "", "password for authentication")
-	cmdRCA.Flags().StringVarP(&rcaAuthURL, "auth-url", "a", "", "authentication url")
-	cmdRCA.Flags().StringVarP(&rcaDisURL, "dis-url", "d", "", "disconnect url")
-	cmdRCA.Flags().StringVarP(&rcaServerAddr, "server-addr", "s", "127.0.0.1", "rsa server address")
-	cmdRCA.Flags().StringVarP(&rcaServerPort, "server-port", "r", "7000", "rsa server port")
+	cmdRCA.Flags().StringVar(&rcaAuthURL, "auth-url", "", "authentication url")
+	cmdRCA.Flags().StringVar(&rcaDisURL, "dis-url", "", "disconnect url")
+	cmdRCA.Flags().StringVar(&rcaServerAddr, "server-addr", "127.0.0.1", "rsa server address")
+	cmdRCA.Flags().StringVar(&rcaServerPort, "server-port", "7000", "rsa server port")
+	cmdRCA.Flags().BoolVarP(&rcaTLS, "tls", "l", false, "enable tls")
+
+	cmdRoot.PersistentFlags().StringVarP(&token, "token", "t", "", "token for rsa and rca(should be same)")
+
+	cmdRSA.Flags().StringVar(&rsaBindAddr, "bind-addr", "127.0.0.1", "rsa bind address")
+	cmdRSA.Flags().StringVar(&rsaBindPort, "bind-port", "7000", "rsa bind port")
+
+	home := os.Getenv("HOME")
+	if home == "" {
+		log.Println("[ERROR]: $HOME env is not set, please set it")
+	}
+
+	pathToServiceTreeLinux = home + "/ServiceTree"
 }
 
-var rootCmd = &cobra.Command{
-	Use:   "installer.exe",
-	Short: "installer.exe is default installer for rca and rsa",
+var cmdRoot = &cobra.Command{
+	Use:   "installer",
+	Short: "default installer for rca or rsa",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		//TODO: build both rca and rsa
-
 		return nil
 	},
 }
 
 var cmdRCA = &cobra.Command{
 	Use:   "rca",
-	Short: "build only rca",
+	Short: "install rca client (only Windows)",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if strings.Contains(runtime.GOOS, "linux") {
 			return errors.New("[ERROR]: rca can't be built on Linux")
@@ -108,17 +120,17 @@ var cmdRCA = &cobra.Command{
 			return err
 		}
 
-		err = modifyINIVNC(vncPassword, vncPassword2)
+		err = modifyINIVNC()
 		if err != nil {
 			return err
 		}
 
-		err = callSetPaswd(vncPassword, vncPassword2)
+		err = callSetPaswd()
 		if err != nil {
 			return err
 		}
 
-		err = modifyINIRCA(rcaUsername, rcaPassword, rcaAuthURL, rcaDisURL, rcaServerAddr, rcaServerPort, token, tls)
+		err = modifyINIRCA()
 		if err != nil {
 			return err
 		}
@@ -128,7 +140,7 @@ var cmdRCA = &cobra.Command{
 			return err
 		}
 
-		err = createServiceSSH(sshTrustKey)
+		err = createServiceSSH()
 		if err != nil {
 			return err
 		}
@@ -144,7 +156,7 @@ var cmdRCA = &cobra.Command{
 
 var cmdRSA = &cobra.Command{
 	Use:   "rsa",
-	Short: "build only rsa",
+	Short: "install rsa server (only Linux)",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if strings.Contains(runtime.GOOS, "windows") {
 			return errors.New("[ERROR]: rsa can't be built on Windows")
@@ -168,17 +180,23 @@ var cmdRSA = &cobra.Command{
 			return err
 		}
 
-		err = createServiceRSA()
+		err = modifyINIRSA()
 		if err != nil {
 			return err
 		}
+
+		//won't work
+		// err = createServiceRSA()
+		// if err != nil {
+		// 	return err
+		// }
 
 		return nil
 	},
 }
 
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
+	if err := cmdRoot.Execute(); err != nil {
 		os.Exit(1)
 	}
 }
@@ -215,11 +233,6 @@ func buildRCA() error {
 func buildRSA() error {
 	log.Println("[INFO]: building rsa")
 
-	home := os.Getenv("HOME")
-	if home == "" {
-		return errors.New("[ERROR]: $HOME env is not set, please set it")
-	}
-
 	wd, err := os.Getwd()
 	if err != nil {
 		return errors.New("[ERROR]: getting working dir: " + err.Error())
@@ -230,7 +243,7 @@ func buildRSA() error {
 		return errors.New("[ERROR]: changing working dir to /frp: " + err.Error())
 	}
 
-	cmd := exec.Command("/usr/local/go/bin/go", "build", "-o", home+"/ServiceTree/rsa/rsa", "./cmd/frps")
+	cmd := exec.Command("go", "build", "-o", pathToServiceTreeLinux+"/rsa/rsa", "./cmd/frps")
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 
@@ -248,13 +261,8 @@ func buildRSA() error {
 	return nil
 }
 
-func createServiceRSA() error {
-
-	return nil
-}
-
 // modifyINIVNC creates an .ini file for WinVNC and adds configuration to it
-func modifyINIVNC(vncp, vncp2 string) error {
+func modifyINIVNC() error {
 	log.Println("[INFO]: modifying winvnc.ini file")
 
 	wd, err := os.Getwd()
@@ -298,9 +306,9 @@ func modifyINIVNC(vncp, vncp2 string) error {
 		f.Section("admin").Key("QueryTimeout").SetValue(vncQueryTimeout)
 	}
 
-	f.Section("PASSWORD").Key("passwd").SetValue(vncp)
-	if vncp2 != "" {
-		f.Section("PASSWORD").Key("passwd2").SetValue(vncp2)
+	f.Section("PASSWORD").Key("passwd").SetValue(vncPassword)
+	if vncPassword2 != "" {
+		f.Section("PASSWORD").Key("passwd2").SetValue(vncPassword2)
 	}
 
 	if err := f.SaveTo("winvnc.ini"); err != nil {
@@ -317,30 +325,10 @@ func modifyINIVNC(vncp, vncp2 string) error {
 	return nil
 }
 
-func callSetPaswd(password, password2 string) error {
-	log.Printf("[INFO]: Running setpasswd.exe with password %s\n", password)
-
-	if password2 != "" {
-		cmd := exec.Command(pathToServiceTreeWindows+"\\"+"setpasswd.exe", password, password2)
-		err := cmd.Run()
-		if err != nil {
-			return errors.New("[ERROR]: running setpasswd.exe: " + err.Error())
-		}
-	} else {
-		cmd := exec.Command(pathToServiceTreeWindows+"\\"+"setpasswd.exe", password)
-		err := cmd.Run()
-		if err != nil {
-			return errors.New("[ERROR]: running setpasswd.exe: " + err.Error())
-		}
-	}
-
-	return nil
-}
-
-func modifyINIRCA(username, password, aurl, durl, sAddr, sPort, sToken string, tls bool) error {
+func modifyINIRCA() error {
 	log.Printf("[INFO]: Modifying rca.ini file.\n")
 
-	if username == "" || password == "" || aurl == "" || durl == "" {
+	if rcaUsername == "" || rcaPassword == "" || rcaAuthURL == "" || rcaDisURL == "" {
 		return errors.New("[ERROR]: username | password | auth-url | dis-url can't be empty")
 	}
 
@@ -371,16 +359,16 @@ func modifyINIRCA(username, password, aurl, durl, sAddr, sPort, sToken string, t
 		return errors.New("[ERROR]: loading rca.ini file: " + err.Error())
 	}
 
-	f.Section("common").Key("username").SetValue(username)
-	f.Section("common").Key("password").SetValue(password)
-	f.Section("common").Key("auth_url").SetValue(aurl)
-	f.Section("common").Key("disconnect_url").SetValue(durl)
-	f.Section("common").Key("server_addr").SetValue(sAddr)
-	f.Section("common").Key("server_port").SetValue(sPort)
-	if sToken != "" {
-		f.Section("common").Key("token").SetValue(sToken)
+	f.Section("common").Key("username").SetValue(rcaUsername)
+	f.Section("common").Key("password").SetValue(rcaPassword)
+	f.Section("common").Key("auth_url").SetValue(rcaAuthURL)
+	f.Section("common").Key("disconnect_url").SetValue(rcaDisURL)
+	f.Section("common").Key("server_addr").SetValue(rcaServerAddr)
+	f.Section("common").Key("server_port").SetValue(rcaServerPort)
+	if token != "" {
+		f.Section("common").Key("token").SetValue(token)
 	}
-	if tls {
+	if rcaTLS {
 		f.Section("common").Key("tls_enable").SetValue("true")
 	} else {
 		f.Section("common").Key("tls_enable").SetValue("false")
@@ -401,33 +389,45 @@ func modifyINIRCA(username, password, aurl, durl, sAddr, sPort, sToken string, t
 	return nil
 }
 
-func createServiceVNC() error {
-	log.Println("[INFO]: creating ServiceTree-winvnc service")
+func modifyINIRSA() error {
+	log.Println("[INFO]: modifying rsa.ini file")
 
 	wd, err := os.Getwd()
 	if err != nil {
 		return errors.New("[ERROR]: getting working dir: " + err.Error())
 	}
 
-	err = os.Chdir(pathToServiceTreeWindows)
+	err = os.Chdir(pathToServiceTreeLinux + "/rsa")
 	if err != nil {
-		return fmt.Errorf("[ERROR]: changing working dir to %s: %s", pathToServiceTreeWindows, err.Error())
+		return fmt.Errorf("[ERROR]: changing working dir to %s: %s", pathToServiceTreeLinux, err.Error())
 	}
 
-	cmd := new(exec.Cmd)
-
-	cmd = exec.Command("sc", "create", "ServiceTree-winvnc", "binPath="+pathToServiceTreeWindows+"\\winvnc.exe -service", "start=auto")
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-	if err := cmd.Run(); err != nil {
-		return errors.New("[ERROR]: running sc create ServiceTree-winvnc fail: " + err.Error())
+	_, err = os.Open("rsa.ini")
+	if err != nil {
+		if os.IsNotExist(err) {
+			_, err = os.Create("rsa.ini")
+			if err != nil {
+				return errors.New("[ERROR]: creating rsa.ini file: " + err.Error())
+			}
+		} else {
+			return errors.New("[ERROR]: opening rsa.ini file: " + err.Error())
+		}
 	}
 
-	cmd = exec.Command("sc", "start", "ServiceTree-winvnc")
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-	if err := cmd.Run(); err != nil {
-		return errors.New("[ERROR]: running sc start ServiceTree-winvnc fail: " + err.Error())
+	f, err := ini.Load("rsa.ini")
+	if err != nil {
+		return errors.New("[ERROR]: loading rsa.ini file: " + err.Error())
+	}
+
+	f.Section("common").Key("bind_addr").SetValue(rsaBindAddr)
+	f.Section("common").Key("bind_port").SetValue(rsaBindPort)
+	if token != "" {
+		f.Section("common").Key("token").SetValue(token)
+	}
+
+	err = f.SaveTo("rsa.ini")
+	if err != nil {
+		return errors.New("[ERROR]: saving rsa.ini file: " + err.Error())
 	}
 
 	err = os.Chdir(wd)
@@ -435,7 +435,27 @@ func createServiceVNC() error {
 		return fmt.Errorf("[ERROR]: changing working dir to %s: %s", wd, err.Error())
 	}
 
-	log.Println("[INFO]: creating ServiceTree-winvnc service done")
+	log.Printf("[INFO]: modifying rsa.ini file DONE !\n")
+
+	return nil
+}
+
+func callSetPaswd() error {
+	log.Printf("[INFO]: Running setpasswd.exe with password %s\n", vncPassword)
+
+	if vncPassword2 != "" {
+		cmd := exec.Command(pathToServiceTreeWindows+"\\"+"setpasswd.exe", vncPassword, vncPassword2)
+		err := cmd.Run()
+		if err != nil {
+			return errors.New("[ERROR]: running setpasswd.exe: " + err.Error())
+		}
+	} else {
+		cmd := exec.Command(pathToServiceTreeWindows+"\\"+"setpasswd.exe", vncPassword)
+		err := cmd.Run()
+		if err != nil {
+			return errors.New("[ERROR]: running setpasswd.exe: " + err.Error())
+		}
+	}
 
 	return nil
 }
@@ -495,7 +515,7 @@ func copySSHTrustKey(path string) error {
 	return nil
 }
 
-func createServiceSSH(uri string) error {
+func createServiceSSH() error {
 	log.Println("[INFO]: creating ServiceTree-ssh service")
 
 	cmd := new(exec.Cmd)
@@ -524,22 +544,22 @@ func createServiceSSH(uri string) error {
 	*/
 
 	//check if user provided url or path to file
-	if uri != "" {
-		_, err := url.ParseRequestURI(uri)
+	if sshTrustKey != "" {
+		_, err := url.ParseRequestURI(sshTrustKey)
 		if err == nil {
-			err := copySSHTrustKey(uri)
+			err := copySSHTrustKey(sshTrustKey)
 			if err != nil {
 				return err
 			}
 		} else {
-			err := downloadSSHTrustKey(uri)
+			err := downloadSSHTrustKey(sshTrustKey)
 			if err != nil {
 				return err
 			}
 		}
 	}
 
-	cmd = exec.Command("sc", "create", "ServiceTree-ssh", "binPath="+pathToSSH+" -f "+workingDir+"\\sshd_config", "start=auto")
+	cmd = exec.Command("sc", "create", "ServiceTree-ssh", "binPath="+pathToSSH+" -f "+workingDir+"\\config\\sshd_config", "start=auto")
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	if err := cmd.Run(); err != nil {
@@ -554,6 +574,73 @@ func createServiceSSH(uri string) error {
 	}
 
 	log.Println("[INFO]: creating ServiceTree-ssh done")
+
+	return nil
+}
+
+func createServiceVNC() error {
+	log.Println("[INFO]: creating ServiceTree-winvnc service")
+
+	wd, err := os.Getwd()
+	if err != nil {
+		return errors.New("[ERROR]: getting working dir: " + err.Error())
+	}
+
+	err = os.Chdir(pathToServiceTreeWindows)
+	if err != nil {
+		return fmt.Errorf("[ERROR]: changing working dir to %s: %s", pathToServiceTreeWindows, err.Error())
+	}
+
+	cmd := new(exec.Cmd)
+
+	cmd = exec.Command("sc", "create", "ServiceTree-winvnc", "binPath="+pathToServiceTreeWindows+"\\winvnc.exe -service", "start=auto")
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+	if err := cmd.Run(); err != nil {
+		return errors.New("[ERROR]: running sc create ServiceTree-winvnc fail: " + err.Error())
+	}
+
+	cmd = exec.Command("sc", "start", "ServiceTree-winvnc")
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+	if err := cmd.Run(); err != nil {
+		return errors.New("[ERROR]: running sc start ServiceTree-winvnc fail: " + err.Error())
+	}
+
+	err = os.Chdir(wd)
+	if err != nil {
+		return fmt.Errorf("[ERROR]: changing working dir to %s: %s", wd, err.Error())
+	}
+
+	log.Println("[INFO]: creating ServiceTree-winvnc service done")
+
+	return nil
+}
+
+func createServiceRSA() error {
+	var err error
+	cmd := new(exec.Cmd)
+
+	cmd = exec.Command("cp", workingDir+"/rsa.service", "/lib/systemd/system")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err = cmd.Run(); err != nil {
+		return errors.New("[ERROR]: running cp command")
+	}
+
+	cmd = exec.Command("systemctl", "daemon-reload")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err = cmd.Run(); err != nil {
+		return errors.New("[ERROR]: running systemctl daemon-reload command")
+	}
+
+	cmd = exec.Command("systemctl", "enable", "rsa.service")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err = cmd.Run(); err != nil {
+		return errors.New("[ERROR]: running systemctl enable command")
+	}
 
 	return nil
 }
@@ -603,7 +690,7 @@ func createNSSMRCA() error {
 
 	cmd = exec.Command("nssm.exe", "start", "ServiceTree-rca")
 	if err := cmd.Run(); err != nil {
-
+		//intentionally no error checking
 	}
 
 	err = os.Chdir(wd)

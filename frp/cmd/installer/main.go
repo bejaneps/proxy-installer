@@ -1,7 +1,7 @@
 package main
 
 func main() {
-	rootCmd.AddCommand(cmdRCA, cmdRSA)
+	cmdRoot.AddCommand(cmdRCA, cmdRSA)
 
 	Execute()
 }

@@ -23,8 +23,12 @@
 
 ### RSA
     1. Run chmod ugo+x build.sh
-    2. Start build script: source build.sh
-    3. Run installer rsa --help in build directory to see all available flags(arguments)
+    2. Change terminal to root (sudo -s)
+    3. Start build script: source build.sh
+    4. Exit root terminal (exit)
+    5. Run installer rsa --help in build directory to see all available flags(arguments)
+    6. (Optional) After building rsa, you can start it as a service, running an rsa_start.sh script as an **administrator** in configs folder
+    7. (NOTE) You have to change $HOME in rsa.service for it to work ($HOME should be changed to your home path, ex: /home/someuser)
 
 ## Building binaries
 ----------------------------------------------------------
@@ -83,7 +87,7 @@ To add authorized key use `--ssh-trust-key path_to_key.pub|url_to_key.pub` durin
 
 ### Linux
 
-Installation directory: /usr/share/ServiceTree.
+Installation directory: $HOME/ServiceTree
 
 Similar to rca, you can check available parameters using `installer --help` command
 
