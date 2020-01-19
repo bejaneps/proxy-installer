@@ -22,8 +22,9 @@
     2. Run build\installer.exe rca --help to see all available flags(arguments)
 
 ### RSA
-    1. Start build script build.sh as an **administrator**
-    2. Run .\build\installer rsa --help to see all available flags(arguments)
+    1. Run chmod ugo+x build.sh
+    2. Start build script: source build.sh
+    3. Run installer rsa --help in build directory to see all available flags(arguments)
 
 ## Building binaries
 ----------------------------------------------------------
@@ -92,6 +93,10 @@ Similar to rca, you can check available parameters using `installer --help` comm
 To uninstall **rca** run `clean.bat` script with **administrator** privileges
 
 It will remove all build files by Microsoft Visual Studio, stop all services created by installer and delete root folder of ServiceTree
+
+To uninstall **rca** run `clean.sh` script with **administrator** privileges
+
+It will remove ServiceTree root folder, and also systemd service created by it
 
 ## Usage
 ----------------------------------------------------------

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 
 	"github.com/go-ini/ini"
 	"github.com/spf13/cobra"
@@ -21,10 +22,11 @@ const (
 	pathToNSSM    = "C:\\Program Files\\nssm-2.24\\win64\\nssm.exe"
 	pathToNASM    = "C:\\Program Files\\NASM\\nasm.exe"
 
-	pathToServiceTree    = "C:\\Program Files\\ServiceTree"
-	pathToProgramFiles32 = "C:\\Program Files (x86)"
-	pathToProgramFiles64 = "C:\\Program Files"
-	pathToSSH            = "C:\\Windows\\System32\\OpenSSH\\sshd.exe"
+	pathToServiceTreeWindows = "C:\\Program Files\\ServiceTree"
+	pathToServiceTreeLinux   = "/usr/share/ServiceTree"
+	pathToProgramFiles32     = "C:\\Program Files (x86)"
+	pathToProgramFiles64     = "C:\\Program Files"
+	pathToSSH                = "C:\\Windows\\System32\\OpenSSH\\sshd.exe"
 
 	serviceTree = "ServiceTree"
 )
@@ -48,8 +50,7 @@ var (
 	rcaServerAddr string
 	rcaServerPort string
 
-	workingDir          string
-	pathToServicesDebug string
+	workingDir string
 )
 
 func init() {
@@ -70,21 +71,6 @@ func init() {
 	cmdRCA.Flags().StringVarP(&rcaDisURL, "dis-url", "d", "", "disconnect url")
 	cmdRCA.Flags().StringVarP(&rcaServerAddr, "server-addr", "s", "127.0.0.1", "rsa server address")
 	cmdRCA.Flags().StringVarP(&rcaServerPort, "server-port", "r", "7000", "rsa server port")
-
-	var err error
-
-	//setting working directory
-	err = os.Chdir("..\\")
-	if err != nil {
-		log.Fatal("[ERROR]: changing directory: " + err.Error())
-	}
-
-	workingDir, err = os.Getwd()
-	if err != nil {
-		log.Fatal("[ERROR]: getting working dir: " + err.Error())
-	}
-
-	pathToServicesDebug = workingDir + "\\services\\Debug"
 }
 
 var rootCmd = &cobra.Command{
@@ -101,7 +87,21 @@ var cmdRCA = &cobra.Command{
 	Use:   "rca",
 	Short: "build only rca",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if strings.Contains(runtime.GOOS, "linux") {
+			return errors.New("[ERROR]: rca can't be built on Linux")
+		}
 		var err error
+
+		//setting working directory
+		err = os.Chdir("..\\")
+		if err != nil {
+			log.Fatal("[ERROR]: changing directory: " + err.Error())
+		}
+
+		workingDir, err = os.Getwd()
+		if err != nil {
+			log.Fatal("[ERROR]: getting working dir: " + err.Error())
+		}
 
 		err = buildRCA()
 		if err != nil {
@@ -146,13 +146,37 @@ var cmdRSA = &cobra.Command{
 	Use:   "rsa",
 	Short: "build only rsa",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		//TODO: implement rsa building process
+		if strings.Contains(runtime.GOOS, "windows") {
+			return errors.New("[ERROR]: rsa can't be built on Windows")
+		}
+
+		var err error
+
+		//setting working directory
+		err = os.Chdir("../")
+		if err != nil {
+			log.Fatal("[ERROR]: changing directory: " + err.Error())
+		}
+
+		workingDir, err = os.Getwd()
+		if err != nil {
+			log.Fatal("[ERROR]: getting working dir: " + err.Error())
+		}
+
+		err = buildRSA()
+		if err != nil {
+			return err
+		}
+
+		err = createServiceRSA()
+		if err != nil {
+			return err
+		}
 
 		return nil
 	},
 }
 
-// Execute runs commands 1 by 1 from arguments supplied
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -172,7 +196,7 @@ func buildRCA() error {
 		return errors.New("[ERROR]: changing working dir to \\frp: " + err.Error())
 	}
 
-	cmd := exec.Command("go", "build", "-o", pathToServiceTree+"\\rca\\rca.exe", ".\\cmd\\frpc\\")
+	cmd := exec.Command("go", "build", "-o", pathToServiceTreeWindows+"\\rca\\rca.exe", ".\\cmd\\frpc\\")
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 
@@ -188,6 +212,47 @@ func buildRCA() error {
 	return nil
 }
 
+func buildRSA() error {
+	log.Println("[INFO]: building rsa")
+
+	home := os.Getenv("HOME")
+	if home == "" {
+		return errors.New("[ERROR]: $HOME env is not set, please set it")
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		return errors.New("[ERROR]: getting working dir: " + err.Error())
+	}
+
+	err = os.Chdir(workingDir + "/frp")
+	if err != nil {
+		return errors.New("[ERROR]: changing working dir to /frp: " + err.Error())
+	}
+
+	cmd := exec.Command("/usr/local/go/bin/go", "build", "-o", home+"/ServiceTree/rsa/rsa", "./cmd/frps")
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+
+	if err := cmd.Run(); err != nil {
+		return errors.New("[ERROR]: running go build command")
+	}
+
+	err = os.Chdir(wd)
+	if err != nil {
+		return fmt.Errorf("Changing working dir to %s: %s", wd, err.Error())
+	}
+
+	log.Println("[INFO]: building rsa done")
+
+	return nil
+}
+
+func createServiceRSA() error {
+
+	return nil
+}
+
 // modifyINIVNC creates an .ini file for WinVNC and adds configuration to it
 func modifyINIVNC(vncp, vncp2 string) error {
 	log.Println("[INFO]: modifying winvnc.ini file")
@@ -197,9 +262,9 @@ func modifyINIVNC(vncp, vncp2 string) error {
 		return errors.New("[ERROR]: getting working dir: " + err.Error())
 	}
 
-	err = os.Chdir(pathToServiceTree)
+	err = os.Chdir(pathToServiceTreeWindows)
 	if err != nil {
-		return fmt.Errorf("[ERROR]: changing working dir to %s: %s", pathToServiceTree, err.Error())
+		return fmt.Errorf("[ERROR]: changing working dir to %s: %s", pathToServiceTreeWindows, err.Error())
 	}
 
 	_, err = os.Open("winvnc.ini")
@@ -256,13 +321,13 @@ func callSetPaswd(password, password2 string) error {
 	log.Printf("[INFO]: Running setpasswd.exe with password %s\n", password)
 
 	if password2 != "" {
-		cmd := exec.Command(pathToServiceTree+"\\"+"setpasswd.exe", password, password2)
+		cmd := exec.Command(pathToServiceTreeWindows+"\\"+"setpasswd.exe", password, password2)
 		err := cmd.Run()
 		if err != nil {
 			return errors.New("[ERROR]: running setpasswd.exe: " + err.Error())
 		}
 	} else {
-		cmd := exec.Command(pathToServiceTree+"\\"+"setpasswd.exe", password)
+		cmd := exec.Command(pathToServiceTreeWindows+"\\"+"setpasswd.exe", password)
 		err := cmd.Run()
 		if err != nil {
 			return errors.New("[ERROR]: running setpasswd.exe: " + err.Error())
@@ -284,9 +349,9 @@ func modifyINIRCA(username, password, aurl, durl, sAddr, sPort, sToken string, t
 		return errors.New("[ERROR]: getting working dir: " + err.Error())
 	}
 
-	err = os.Chdir(pathToServiceTree + "\\rca")
+	err = os.Chdir(pathToServiceTreeWindows + "\\rca")
 	if err != nil {
-		return fmt.Errorf("[ERROR]: changing working dir to %s: %s", pathToServiceTree+"\\rca", err.Error())
+		return fmt.Errorf("[ERROR]: changing working dir to %s: %s", pathToServiceTreeWindows+"\\rca", err.Error())
 	}
 
 	_, err = os.Open("rca.ini")
@@ -344,14 +409,14 @@ func createServiceVNC() error {
 		return errors.New("[ERROR]: getting working dir: " + err.Error())
 	}
 
-	err = os.Chdir(pathToServiceTree)
+	err = os.Chdir(pathToServiceTreeWindows)
 	if err != nil {
-		return fmt.Errorf("[ERROR]: changing working dir to %s: %s", pathToServiceTree, err.Error())
+		return fmt.Errorf("[ERROR]: changing working dir to %s: %s", pathToServiceTreeWindows, err.Error())
 	}
 
 	cmd := new(exec.Cmd)
 
-	cmd = exec.Command("sc", "create", "ServiceTree-winvnc", "binPath="+pathToServiceTree+"\\winvnc.exe -service", "start=auto")
+	cmd = exec.Command("sc", "create", "ServiceTree-winvnc", "binPath="+pathToServiceTreeWindows+"\\winvnc.exe -service", "start=auto")
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	if err := cmd.Run(); err != nil {
@@ -515,21 +580,21 @@ func createNSSMRCA() error {
 
 	cmd := new(exec.Cmd)
 
-	cmd = exec.Command("nssm.exe", "install", "ServiceTree-rca", pathToServiceTree+"\\rca\\rca.exe")
+	cmd = exec.Command("nssm.exe", "install", "ServiceTree-rca", pathToServiceTreeWindows+"\\rca\\rca.exe")
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	if err := cmd.Run(); err != nil {
 		return errors.New("[ERROR]: running nssm.exe install ServiceTree-rca")
 	}
 
-	cmd = exec.Command("nssm.exe", "set", "ServiceTree-rca", "AppStdout", pathToServiceTree+"\\rca\\rca_stdout.log")
+	cmd = exec.Command("nssm.exe", "set", "ServiceTree-rca", "AppStdout", pathToServiceTreeWindows+"\\rca\\rca_stdout.log")
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	if err := cmd.Run(); err != nil {
 		return errors.New("[ERROR]: running nssm.exe set ServiceTree-rca AppStdout")
 	}
 
-	cmd = exec.Command("nssm.exe", "set", "ServiceTree-rca", "AppStderr", pathToServiceTree+"\\rca\\rca_stderr.log")
+	cmd = exec.Command("nssm.exe", "set", "ServiceTree-rca", "AppStderr", pathToServiceTreeWindows+"\\rca\\rca_stderr.log")
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	if err := cmd.Run(); err != nil {
